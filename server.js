@@ -6,6 +6,17 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Enable CORS for local HTML file access
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // Data directory - will be on persistent disk when deployed
 const DATA_DIR = process.env.DATA_DIR || './data';
 const SOURCE_URL = 'https://deving.zone/en/nfts/alliance_daos.json';
@@ -76,11 +87,14 @@ app.post('/capture-snapshot', async (req, res) => {
     
     console.log(`[${getUTCTimestamp()}] Snapshot saved: ${filename}`);
     
+    // Extract NFT count - data structure has collection_stats and nfts array
+    const nftCount = data.nfts ? data.nfts.length : (Array.isArray(data) ? data.length : Object.keys(data).length);
+    
     res.json({
       success: true,
       timestamp,
       filename,
-      nft_count: Array.isArray(data) ? data.length : Object.keys(data).length
+      nft_count: nftCount
     });
   } catch (error) {
     console.error(`[${getUTCTimestamp()}] Snapshot capture failed:`, error.message);
@@ -164,8 +178,13 @@ function detectEvents(snapshots) {
     total_events: 0
   };
   
-  // Normalize snapshots to array format
-  const normalizedSnapshots = snapshots.map(s => Array.isArray(s) ? s : Object.values(s));
+  // Normalize snapshots to array format - handle both array and {nfts: []} format
+  const normalizedSnapshots = snapshots.map(s => {
+    if (s.nfts && Array.isArray(s.nfts)) {
+      return s.nfts; // New format with collection_stats wrapper
+    }
+    return Array.isArray(s) ? s : Object.values(s);
+  });
   
   // Process each NFT (1-10000)
   for (let nftId = 1; nftId <= 10000; nftId++) {
@@ -428,6 +447,181 @@ app.get('/status', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Test endpoint - compare two specific snapshots
+app.get('/test-detection/:file1/:file2', async (req, res) => {
+  try {
+    const { file1, file2 } = req.params;
+    
+    // Load the two snapshots
+    const snapshot1Path = path.join(DATA_DIR, 'snapshots', file1);
+    const snapshot2Path = path.join(DATA_DIR, 'snapshots', file2);
+    
+    const data1 = JSON.parse(await fs.readFile(snapshot1Path, 'utf8'));
+    const data2 = JSON.parse(await fs.readFile(snapshot2Path, 'utf8'));
+    
+    // Normalize to arrays
+    const nfts1 = data1.nfts || (Array.isArray(data1) ? data1 : Object.values(data1));
+    const nfts2 = data2.nfts || (Array.isArray(data2) ? data2 : Object.values(data2));
+    
+    // Detect events between these two snapshots
+    const events = detectEventsBetweenTwo(nfts1, nfts2);
+    
+    res.json({
+      file1,
+      file2,
+      nfts_compared: nfts1.length,
+      ...events
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List all snapshot files
+app.get('/list-snapshots', async (req, res) => {
+  try {
+    const snapshotDir = path.join(DATA_DIR, 'snapshots');
+    const files = await fs.readdir(snapshotDir);
+    const sortedFiles = files.sort();
+    
+    res.json({
+      count: files.length,
+      files: sortedFiles
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message, files: [] });
+  }
+});
+
+// Helper function to detect events between two snapshots
+function detectEventsBetweenTwo(prev, curr) {
+  const activityLog = {};
+  const summary = {
+    bbl_sales: 0,
+    boost_sales: 0,
+    transfers: 0,
+    bbl_listings: 0,
+    bbl_delistings: 0,
+    boost_listings: 0,
+    boost_delistings: 0,
+    daodao_stakes: 0,
+    daodao_unstakes: 0,
+    enterprise_stakes: 0,
+    enterprise_unstakes: 0,
+    breaks: 0,
+    total_events: 0
+  };
+  
+  // Process each NFT
+  for (let nftId = 1; nftId <= 10000; nftId++) {
+    const prevNFT = prev.find(n => n.id === nftId);
+    const currNFT = curr.find(n => n.id === nftId);
+    
+    if (!prevNFT || !currNFT) continue;
+    
+    const events = [];
+    
+    // Owner change detection
+    if (prevNFT.owner !== currNFT.owner) {
+      const wasListedBbl = prevNFT.bbl === true;
+      const wasListedBoost = prevNFT.boost === true;
+      
+      if (wasListedBbl) {
+        events.push({
+          type: 'sale',
+          marketplace: 'bbl',
+          from: prevNFT.owner,
+          to: currNFT.owner
+        });
+        summary.bbl_sales++;
+      } else if (wasListedBoost) {
+        events.push({
+          type: 'sale',
+          marketplace: 'boost',
+          from: prevNFT.owner,
+          to: currNFT.owner
+        });
+        summary.boost_sales++;
+      } else {
+        events.push({
+          type: 'transfer',
+          from: prevNFT.owner,
+          to: currNFT.owner
+        });
+        summary.transfers++;
+      }
+      summary.total_events++;
+    }
+    
+    // Marketplace listing changes
+    if (prevNFT.bbl !== currNFT.bbl) {
+      if (currNFT.bbl === true) {
+        events.push({ type: 'listing', marketplace: 'bbl' });
+        summary.bbl_listings++;
+      } else {
+        events.push({ type: 'delisting', marketplace: 'bbl' });
+        summary.bbl_delistings++;
+      }
+      summary.total_events++;
+    }
+    
+    if (prevNFT.boost !== currNFT.boost) {
+      if (currNFT.boost === true) {
+        events.push({ type: 'listing', marketplace: 'boost' });
+        summary.boost_listings++;
+      } else {
+        events.push({ type: 'delisting', marketplace: 'boost' });
+        summary.boost_delistings++;
+      }
+      summary.total_events++;
+    }
+    
+    // Staking changes
+    if (prevNFT.daodao !== currNFT.daodao) {
+      if (currNFT.daodao === true) {
+        events.push({ type: 'stake', protocol: 'daodao' });
+        summary.daodao_stakes++;
+      } else {
+        events.push({ type: 'unstake', protocol: 'daodao' });
+        summary.daodao_unstakes++;
+      }
+      summary.total_events++;
+    }
+    
+    if (prevNFT.enterprise !== currNFT.enterprise) {
+      if (currNFT.enterprise === true) {
+        events.push({ type: 'stake', protocol: 'enterprise' });
+        summary.enterprise_stakes++;
+      } else {
+        events.push({ type: 'unstake', protocol: 'enterprise' });
+        summary.enterprise_unstakes++;
+      }
+      summary.total_events++;
+    }
+    
+    // Break detection
+    if (prevNFT.broken !== currNFT.broken) {
+      events.push({
+        type: 'break_change',
+        from: prevNFT.broken,
+        to: currNFT.broken
+      });
+      summary.breaks++;
+      summary.total_events++;
+    }
+    
+    // Only add to log if there were events
+    if (events.length > 0) {
+      activityLog[nftId] = events;
+    }
+  }
+  
+  return {
+    summary,
+    activity_log: activityLog
+  };
+}
 
 // Initialize and start server
 async function start() {
