@@ -26,7 +26,7 @@ services:
     region: oregon
     schedule: "0 * * * *"
     buildCommand: npm install
-    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/capture-snapshot"
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service-er83.onrender.com/capture-snapshot"
     envVars:
       - key: NODE_ENV
         value: production
@@ -40,7 +40,7 @@ services:
     region: oregon
     schedule: "5 0 * * *"
     buildCommand: npm install
-    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/process-daily-events"
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service-er83.onrender.com/process-daily-events"
     envVars:
       - key: NODE_ENV
         value: production
@@ -54,7 +54,7 @@ services:
     region: oregon
     schedule: "10 0 * * 1"
     buildCommand: npm install
-    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/aggregate-weekly"
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service-er83.onrender.com/aggregate-weekly"
     envVars:
       - key: NODE_ENV
         value: production
@@ -68,7 +68,7 @@ services:
     region: oregon
     schedule: "15 0 1 * *"
     buildCommand: npm install
-    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/aggregate-monthly"
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service-er83.onrender.com/aggregate-monthly"
     envVars:
       - key: NODE_ENV
         value: production
@@ -82,7 +82,7 @@ services:
     region: oregon
     schedule: "20 0 1 1 *"
     buildCommand: npm install
-    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/aggregate-yearly"
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service-er83.onrender.com/aggregate-yearly"
     envVars:
       - key: NODE_ENV
         value: production
