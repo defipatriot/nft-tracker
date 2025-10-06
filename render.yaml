@@ -1,70 +1,90 @@
-# This file is a blueprint for your services on Render.
-
-envVarGroups:
-  - name: nft-tracker-secrets # Creates a group to hold our secret
-    envVars:
-      - key: CRON_SECRET
-        generateValue: true # Render will generate a secure, random secret
-
 services:
-  # ------------------
-  # The Public Web API
-  # ------------------
+  # Main web service with persistent disk
   - type: web
-    name: nft-tracker-service # The name of your service
-    runtime: node
+    name: nft-tracker-service
+    env: node
     region: oregon
     plan: starter
-    buildCommand: "npm install"
-    startCommand: "npm start"
-    healthCheckPath: /health # Use the safe /health endpoint for checks
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+      - key: API_KEY
+        generateValue: true
     disk:
       name: nft-data
       mountPath: /data
       sizeGB: 10
-    envVarGroups:
-      - nft-tracker-secrets # Gives the secret to the web service
 
-  # -------------------------
-  # The Scheduled Cron Jobs
-  # -------------------------
+  # Hourly snapshot cron job
   - type: cron
     name: hourly-snapshot
+    env: node
     region: oregon
     schedule: "0 * * * *"
-    # Add the Authorization header to the command
-    command: "curl -X POST https://nft-tracker-service.onrender.com/capture-snapshot -H \"Authorization: Bearer $CRON_SECRET\""
-    envVarGroups:
-      - nft-tracker-secrets # Gives the secret to this cron job
+    buildCommand: npm install
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/capture-snapshot"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_KEY
+        sync: false
 
+  # Daily processing cron job
   - type: cron
     name: daily-processor
+    env: node
     region: oregon
     schedule: "5 0 * * *"
-    command: "curl -X POST https://nft-tracker-service.onrender.com/process-daily-events -H \"Authorization: Bearer $CRON_SECRET\""
-    envVarGroups:
-      - nft-tracker-secrets
+    buildCommand: npm install
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/process-daily-events"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_KEY
+        sync: false
 
+  # Weekly aggregation cron job
   - type: cron
     name: weekly-aggregator
+    env: node
     region: oregon
     schedule: "10 0 * * 1"
-    command: "curl -X POST https://nft-tracker-service.onrender.com/aggregate-weekly -H \"Authorization: Bearer $CRON_SECRET\""
-    envVarGroups:
-      - nft-tracker-secrets
+    buildCommand: npm install
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/aggregate-weekly"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_KEY
+        sync: false
 
+  # Monthly aggregation cron job
   - type: cron
     name: monthly-aggregator
+    env: node
     region: oregon
     schedule: "15 0 1 * *"
-    command: "curl -X POST https://nft-tracker-service.onrender.com/aggregate-monthly -H \"Authorization: Bearer $CRON_SECRET\""
-    envVarGroups:
-      - nft-tracker-secrets
+    buildCommand: npm install
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/aggregate-monthly"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_KEY
+        sync: false
 
+  # Yearly aggregation cron job
   - type: cron
     name: yearly-aggregator
+    env: node
     region: oregon
     schedule: "20 0 1 1 *"
-    command: "curl -X POST https://nft-tracker-service.onrender.com/aggregate-yearly -H \"Authorization: Bearer $CRON_SECRET\""
-    envVarGroups:
-      - nft-tracker-secrets
+    buildCommand: npm install
+    startCommand: "curl -X POST -H 'x-api-key: $API_KEY' https://nft-tracker-service.onrender.com/aggregate-yearly"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_KEY
+        sync: false
