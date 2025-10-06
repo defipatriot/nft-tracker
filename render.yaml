@@ -1,0 +1,78 @@
+services:
+  # Main web service with persistent disk
+  - type: web
+    name: nft-tracker-service
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+    disk:
+      name: nft-data
+      mountPath: /data
+      sizeGB: 10
+
+  # Hourly snapshot cron job
+  - type: cron
+    name: hourly-snapshot
+    env: node
+    region: oregon
+    schedule: "0 * * * *"
+    buildCommand: npm install
+    startCommand: "curl -X POST https://nft-tracker-service.onrender.com/capture-snapshot"
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # Daily processing cron job
+  - type: cron
+    name: daily-processor
+    env: node
+    region: oregon
+    schedule: "5 0 * * *"
+    buildCommand: npm install
+    startCommand: "curl -X POST https://nft-tracker-service.onrender.com/process-daily-events"
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # Weekly aggregation cron job
+  - type: cron
+    name: weekly-aggregator
+    env: node
+    region: oregon
+    schedule: "10 0 * * 1"
+    buildCommand: npm install
+    startCommand: "curl -X POST https://nft-tracker-service.onrender.com/aggregate-weekly"
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # Monthly aggregation cron job
+  - type: cron
+    name: monthly-aggregator
+    env: node
+    region: oregon
+    schedule: "15 0 1 * *"
+    buildCommand: npm install
+    startCommand: "curl -X POST https://nft-tracker-service.onrender.com/aggregate-monthly"
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # Yearly aggregation cron job
+  - type: cron
+    name: yearly-aggregator
+    env: node
+    region: oregon
+    schedule: "20 0 1 1 *"
+    buildCommand: npm install
+    startCommand: "curl -X POST https://nft-tracker-service.onrender.com/aggregate-yearly"
+    envVars:
+      - key: NODE_ENV
+        value: production
