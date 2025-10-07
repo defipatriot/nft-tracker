@@ -477,7 +477,6 @@ app.get('/health', rateLimit(100, 60000), (req, res) => {
   res.json({ status: 'ok', timestamp: getUTCTimestamp() });
 });
 
-/*
 // Status endpoint - Rate limited
 app.get('/status', rateLimit(30, 60000), async (req, res) => {
   try {
@@ -504,7 +503,6 @@ app.get('/status', rateLimit(30, 60000), async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-*/
 
 // Test endpoint - compare two specific snapshots (PROTECTED - prevents abuse)
 app.get('/test-detection/:file1/:file2', requireAuth, rateLimit(20, 3600000), async (req, res) => {
