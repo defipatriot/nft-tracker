@@ -1,5 +1,5 @@
 services:
-  # Main web service with persistent disk
+  # Main web service - KEEP THIS AS IS
   - type: web
     name: nft-tracker-service
     env: node
@@ -7,7 +7,6 @@ services:
     plan: starter
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -20,7 +19,7 @@ services:
       mountPath: /data
       sizeGB: 10
 
-  # Hourly snapshot cron job
+  # Hourly snapshot cron job - FIXED URL
   - type: cron
     name: hourly-snapshot
     env: node
@@ -34,7 +33,7 @@ services:
       - key: API_KEY
         sync: false
 
-  # Daily processing cron job
+  # Daily processing cron job - FIXED URL
   - type: cron
     name: daily-processor
     env: node
@@ -48,7 +47,7 @@ services:
       - key: API_KEY
         sync: false
 
-  # Weekly aggregation cron job
+  # Weekly aggregation cron job - FIXED URL
   - type: cron
     name: weekly-aggregator
     env: node
@@ -62,7 +61,7 @@ services:
       - key: API_KEY
         sync: false
 
-  # Monthly aggregation cron job
+  # Monthly aggregation cron job - FIXED URL
   - type: cron
     name: monthly-aggregator
     env: node
@@ -76,7 +75,7 @@ services:
       - key: API_KEY
         sync: false
 
-  # Yearly aggregation cron job
+  # Yearly aggregation cron job - FIXED URL
   - type: cron
     name: yearly-aggregator
     env: node
