@@ -225,7 +225,7 @@ function detectEvents(snapshots) {
   const activityLog = {};
   const summary = {
     bbl_sales: 0,
-    boost_sales: 0,
+    boost_sales: 0, // Note: Boost "sales" are ambiguous - could be sales or delistings
     transfers: 0,
     bbl_listings: 0,
     bbl_delistings: 0,
@@ -262,6 +262,10 @@ function detectEvents(snapshots) {
         const wasListedBbl = prev.bbl === true;
         const wasListedBoost = prev.boost === true;
         
+        // Check if marketplace status also changed (indicates delisting vs sale)
+        const boostStatusChanged = prev.boost !== curr.boost;
+        const bblStatusChanged = prev.bbl !== curr.bbl;
+        
         if (wasListedBbl) {
           events.push({
             type: 'sale',
@@ -271,15 +275,19 @@ function detectEvents(snapshots) {
             hour: i
           });
           summary.bbl_sales++;
+          summary.total_events++;
         } else if (wasListedBoost) {
+          // Boost contract hides real owner - can't determine if sale or delisting
           events.push({
-            type: 'sale',
-            marketplace: 'boost',
+            type: 'boost_owner_change',
             from: prev.owner,
             to: curr.owner,
+            marketplace_status_changed: boostStatusChanged,
+            note: 'Could be sale or delisting - Boost contract obscures real owner',
             hour: i
           });
           summary.boost_sales++;
+          summary.total_events++;
         } else {
           events.push({
             type: 'transfer',
@@ -288,8 +296,8 @@ function detectEvents(snapshots) {
             hour: i
           });
           summary.transfers++;
+          summary.total_events++;
         }
-        summary.total_events++;
       }
       
       // Marketplace listing changes
@@ -604,6 +612,9 @@ function detectEventsBetweenTwo(prev, curr) {
       const wasListedBbl = prevNFT.bbl === true;
       const wasListedBoost = prevNFT.boost === true;
       
+      // Check if marketplace status also changed
+      const boostStatusChanged = prevNFT.boost !== currNFT.boost;
+      
       if (wasListedBbl) {
         events.push({
           type: 'sale',
@@ -612,14 +623,18 @@ function detectEventsBetweenTwo(prev, curr) {
           to: currNFT.owner
         });
         summary.bbl_sales++;
+        summary.total_events++;
       } else if (wasListedBoost) {
+        // Boost contract hides real owner - can't determine if sale or delisting
         events.push({
-          type: 'sale',
-          marketplace: 'boost',
+          type: 'boost_owner_change',
           from: prevNFT.owner,
-          to: currNFT.owner
+          to: currNFT.owner,
+          marketplace_status_changed: boostStatusChanged,
+          note: 'Could be sale or delisting - Boost contract obscures real owner'
         });
         summary.boost_sales++;
+        summary.total_events++;
       } else {
         events.push({
           type: 'transfer',
@@ -627,8 +642,8 @@ function detectEventsBetweenTwo(prev, curr) {
           to: currNFT.owner
         });
         summary.transfers++;
+        summary.total_events++;
       }
-      summary.total_events++;
     }
     
     // Marketplace listing changes
