@@ -9,31 +9,36 @@ const PORT = process.env.PORT || 3000;
 // API Key for authentication
 const API_KEY = process.env.API_KEY || 'CHANGE_THIS_SECRET_KEY';
 
-// Rate limiting setup
+// Rate limiting setup - FIXED VERSION
 const requestCounts = new Map();
 
 function rateLimit(maxRequests, windowMs) {
   return (req, res, next) => {
-    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    const now = Date.now();
-    const key = `${ip}-${req.path}`;
-    
-    if (!requestCounts.has(key)) {
-      requestCounts.set(key, []);
+    try {
+      const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'unknown';
+      const now = Date.now();
+      const key = `${ip}-${req.path}`;
+      
+      if (!requestCounts.has(key)) {
+        requestCounts.set(key, []);
+      }
+      
+      const timestamps = requestCounts.get(key).filter(time => now - time < windowMs);
+      
+      if (timestamps.length >= maxRequests) {
+        return res.status(429).json({ 
+          error: 'Rate limit exceeded. Please try again later.',
+          retry_after: Math.ceil(windowMs / 1000)
+        });
+      }
+      
+      timestamps.push(now);
+      requestCounts.set(key, timestamps);
+      next();
+    } catch (error) {
+      console.error('Rate limiter error:', error);
+      next(); // Allow request through on error to prevent 502
     }
-    
-    const timestamps = requestCounts.get(key).filter(time => now - time < windowMs);
-    
-    if (timestamps.length >= maxRequests) {
-      return res.status(429).json({ 
-        error: 'Rate limit exceeded. Please try again later.',
-        retry_after: Math.ceil(windowMs / 1000)
-      });
-    }
-    
-    timestamps.push(now);
-    requestCounts.set(key, timestamps);
-    next();
   };
 }
 
@@ -348,6 +353,22 @@ function detectEvents(snapshots) {
     
     // Only add to log if there were events
     if (events.length > 0) {
+      // Detect suspicious pattern: acquire + break + relist (fraud detection)
+      const hasOwnerChange = events.some(e => e.type === 'sale' || e.type === 'transfer');
+      const hasBreak = events.some(e => e.type === 'break_change' && e.to === true);
+      const hasListing = events.some(e => e.type === 'listing');
+      
+      if (hasOwnerChange && hasBreak && hasListing) {
+        events.push({
+          type: 'WARNING',
+          pattern: 'acquire_extract_relist',
+          risk_level: 'HIGH',
+          description: 'NFT acquired unbroken, rewards claimed, then listed broken',
+          action_required: 'Verify listing price reflects broken status floor price'
+        });
+        summary.total_events++;
+      }
+      
       activityLog[nftId] = events;
     }
   }
@@ -470,7 +491,7 @@ async function aggregatePeriod(sourceType, targetType, periodId, maxFiles) {
 }
 
 // Public data serving - Rate limited to prevent bandwidth abuse
-app.use('/data', rateLimit(50, 900000), express.static(DATA_DIR)); // 50 requests per 15 min
+app.use('/data', rateLimit(50, 900000), express.static(DATA_DIR));
 
 // Health check - Minimal rate limit
 app.get('/health', rateLimit(100, 60000), (req, res) => {
@@ -504,7 +525,7 @@ app.get('/status', rateLimit(30, 60000), async (req, res) => {
   }
 });
 
-// Test endpoint - compare two specific snapshots (PROTECTED - prevents abuse)
+// Test endpoint - compare two specific snapshots (PROTECTED)
 app.get('/test-detection/:file1/:file2', requireAuth, rateLimit(20, 3600000), async (req, res) => {
   try {
     const { file1, file2 } = req.params;
@@ -669,6 +690,22 @@ function detectEventsBetweenTwo(prev, curr) {
     
     // Only add to log if there were events
     if (events.length > 0) {
+      // Detect suspicious pattern: acquire + break + relist (fraud detection)
+      const hasOwnerChange = events.some(e => e.type === 'sale' || e.type === 'transfer');
+      const hasBreak = events.some(e => e.type === 'break_change' && e.to === true);
+      const hasListing = events.some(e => e.type === 'listing');
+      
+      if (hasOwnerChange && hasBreak && hasListing) {
+        events.push({
+          type: 'WARNING',
+          pattern: 'acquire_extract_relist',
+          risk_level: 'HIGH',
+          description: 'NFT acquired unbroken, rewards claimed, then listed broken',
+          action_required: 'Verify listing price reflects broken status floor price'
+        });
+        summary.total_events++;
+      }
+      
       activityLog[nftId] = events;
     }
   }
